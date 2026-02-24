@@ -1,0 +1,16 @@
+[project]
+name = "dadobounce"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pillow>=12.1.1",
+    "psutil>=7.2.2",
+    "pystray>=0.19.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0.0",
+]
