@@ -10,7 +10,7 @@ dependencies = [
     "pystray>=0.19.5",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "pyinstaller>=6.0.0",
+    "nuitka[onefile]>=4.0.1",
 ]

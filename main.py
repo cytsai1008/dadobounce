@@ -25,11 +25,13 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# Load GIF: Read from sys._MEIPASS when bundled as exe
-if getattr(sys, "frozen", False):
-    _base = sys._MEIPASS
-else:
-    _base = os.path.dirname(os.path.abspath(__file__))
+# Detect if running as a compiled binary (Nuitka or PyInstaller)
+_is_compiled = "__compiled__" in dir() or getattr(sys, "frozen", False)
+# The real exe path (not the temp extraction dir)
+_exe_path = os.path.abspath(sys.argv[0]) if _is_compiled else None
+
+# Load GIF: __file__ works for both Nuitka and normal Python
+_base = os.path.dirname(os.path.abspath(__file__))
 gif_path = os.path.join(_base, "dado.gif")
 img = Image.open(gif_path)
 # Resample for crisp system tray display (16–32px typical)
@@ -49,6 +51,57 @@ for frame in ImageSequence.Iterator(img):
 delay = 0.05
 frame_step = 1
 global_stop = False
+
+# --- Start with Windows (Startup folder shortcut) ---
+def _startup_shortcut_path():
+    """Return the path to the shortcut in the user's Startup folder."""
+    startup_dir = os.path.join(
+        os.environ["APPDATA"],
+        "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+    )
+    return os.path.join(startup_dir, "DadoBounce.lnk")
+
+def _is_autostart_enabled():
+    return os.path.exists(_startup_shortcut_path())
+
+def _toggle_autostart():
+    shortcut_path = _startup_shortcut_path()
+    if _is_autostart_enabled():
+        os.remove(shortcut_path)
+    else:
+        _create_shortcut(shortcut_path)
+
+def _create_shortcut(shortcut_path):
+    """Create a Windows .lnk shortcut pointing to the current executable."""
+    if _is_compiled:
+        target = _exe_path
+        arguments = ""
+    else:
+        target = sys.executable  # python.exe
+        arguments = f'"{os.path.abspath(__file__)}"'
+    working_dir = os.path.dirname(target)
+
+    try:
+        import win32com.client
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shortcut = shell.CreateShortCut(shortcut_path)
+        shortcut.TargetPath = target
+        shortcut.Arguments = arguments
+        shortcut.WorkingDirectory = working_dir
+        shortcut.Description = "DadoBounce CPU Monitor"
+        shortcut.save()
+    except ImportError:
+        # Fallback: use PowerShell to create the shortcut
+        ps_args = arguments.replace('"', '\\"') if arguments else ""
+        ps_cmd = (
+            f'$s=(New-Object -ComObject WScript.Shell).CreateShortcut(\'{shortcut_path}\');'
+            f'$s.TargetPath=\'{target}\';'
+            f'$s.Arguments=\'{ps_args}\';'
+            f'$s.WorkingDirectory=\'{working_dir}\';'
+            f'$s.Description=\'DadoBounce CPU Monitor\';'
+            f'$s.Save()'
+        )
+        os.system(f'powershell -Command "{ps_cmd}"')
 
 def get_cpu_speed_delay():
     global delay, frame_step, global_stop
@@ -90,6 +143,11 @@ def main():
     icon.icon = frames[0]
     icon.title = "CPU 速度監控中"
     icon.menu = pystray.Menu(
+        pystray.MenuItem(
+            "開機啟動",
+            lambda: _toggle_autostart(),
+            checked=lambda item: _is_autostart_enabled(),
+        ),
         pystray.MenuItem("退出", lambda: stop(icon)),
     )
 
