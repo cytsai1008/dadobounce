@@ -32,7 +32,19 @@ else:
     _base = os.path.dirname(os.path.abspath(__file__))
 gif_path = os.path.join(_base, "dado.gif")
 img = Image.open(gif_path)
-frames = [frame.copy() for frame in ImageSequence.Iterator(img)]
+# Resample for crisp system tray display (16–32px typical)
+TRAY_ICON_SIZE = 32
+try:
+    resample = Image.Resampling.LANCZOS
+except AttributeError:
+    resample = Image.LANCZOS
+frames = []
+for frame in ImageSequence.Iterator(img):
+    f = frame.copy()
+    if f.mode != "RGBA":
+        f = f.convert("RGBA")
+    f = f.resize((TRAY_ICON_SIZE, TRAY_ICON_SIZE), resample)
+    frames.append(f)
 
 delay = 0.05
 frame_step = 1
